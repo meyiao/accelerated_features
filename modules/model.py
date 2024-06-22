@@ -136,16 +136,16 @@ class XFeatModel(nn.Module):
 			x = self.norm(x)
 
 		#main backbone
-		x1 = self.block1(x)
-		x2 = self.block2(x1 + self.skip1(x))
-		x3 = self.block3(x2)
-		x4 = self.block4(x3)
-		x5 = self.block5(x4)
+		x1 = self.block1(x)								# x1: [B, 24, H/4, W/4]
+		x2 = self.block2(x1 + self.skip1(x))				# x2: [B, 24, H/4, W/4]
+		x3 = self.block3(x2)							# x3: [B, 64, H/8, W/8]
+		x4 = self.block4(x3)							# x4: [B, 64, H/16, W/16]
+		x5 = self.block5(x4)							# x5: [B, 64, H/32, W/32]
 
 		#pyramid fusion
-		x4 = F.interpolate(x4, (x3.shape[-2], x3.shape[-1]), mode='bilinear')
-		x5 = F.interpolate(x5, (x3.shape[-2], x3.shape[-1]), mode='bilinear')
-		feats = self.block_fusion( x3 + x4 + x5 )
+		x4 = F.interpolate(x4, (x3.shape[-2], x3.shape[-1]), mode='bilinear')  # x4: [B, 64, H/8, W/8]
+		x5 = F.interpolate(x5, (x3.shape[-2], x3.shape[-1]), mode='bilinear')  # x5: [B, 64, H/8, W/8]
+		feats = self.block_fusion( x3 + x4 + x5 )  # feats: [B, 64, H/8, W/8]
 
 		#heads
 		heatmap = self.heatmap_head(feats) # Reliability map
