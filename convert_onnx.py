@@ -10,7 +10,7 @@ import onnxruntime as ort
 net = XFeatModel().eval()
 
 # Random input
-x = torch.randn(1, 3, 640, 640)
+x = torch.randn(1, 1, 640, 640)
 
 # export to ONNX
 torch.onnx.export(net, x, "xfeat.onnx", verbose=True,
