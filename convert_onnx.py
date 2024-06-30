@@ -9,6 +9,9 @@ import onnxruntime as ort
 # set the model to evaluation mode
 net = XFeatModel().eval()
 
+# load the pretrained weights
+net.load_state_dict(torch.load("weights/xfeat.pt", map_location=torch.device('cpu')))
+
 # Random input
 x = torch.randn(1, 1, 640, 640)
 
