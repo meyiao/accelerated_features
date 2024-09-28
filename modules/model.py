@@ -133,7 +133,7 @@ class XFeatModel(nn.Module):
 		#dont backprop through normalization
 		with torch.no_grad():
 			x = x.mean(dim=1, keepdim = True)
-			x = self.norm(x)
+			# x = self.norm(x)
 
 		#main backbone
 		x1 = self.block1(x)								# x1: [B, 24, H/4, W/4]
