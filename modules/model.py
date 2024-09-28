@@ -125,8 +125,8 @@ class XFeatModel(nn.Module):
 			input:
 				x -> torch.Tensor(B, C, H, W) grayscale or rgb images
 			return:
-				feats     ->  torch.Tensor(B, 64, H/8, W/8) dense local features
-				keypoints ->  torch.Tensor(B, 65, H/8, W/8) keypoint logit map
+				feats     ->  torch.Tensor(B, H/8, W/8, 64) dense local features
+				keypoints ->  torch.Tensor(B, H/8, W/8, 65) keypoint logit map
 				heatmap   ->  torch.Tensor(B,  1, H/8, W/8) reliability map
 
 		"""
@@ -151,4 +151,8 @@ class XFeatModel(nn.Module):
 		heatmap = self.heatmap_head(feats) # Reliability map
 		keypoints = self.keypoint_head(self._unfold2d(x, ws=8)) #Keypoint map logits
 
-		return feats, keypoints, heatmap
+		# convert feats and keypoints from [B, C, H, W] to [B, H, W, C]
+		out_feats = feats.permute(0, 2, 3, 1)
+		out_keypoints = keypoints.permute(0, 2, 3, 1)
+
+		return out_feats, out_keypoints, heatmap
