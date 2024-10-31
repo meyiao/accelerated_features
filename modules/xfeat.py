@@ -20,11 +20,12 @@ class XFeat(nn.Module):
 		It supports inference for both sparse and semi-dense feature extraction & matching.
 	"""
 
-	def __init__(self, weights = os.path.abspath(os.path.dirname(__file__)) + '/../weights/xfeat.pt', top_k = 4096):
+	def __init__(self, weights = os.path.abspath(os.path.dirname(__file__)) + '/../weights/xfeat.pt', top_k = 4096, detection_threshold=0.05):
 		super().__init__()
 		self.dev = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 		self.net = XFeatModel().to(self.dev).eval()
 		self.top_k = top_k
+		self.detection_threshold = detection_threshold
 
 		if weights is not None:
 			if isinstance(weights, str):
@@ -35,8 +36,18 @@ class XFeat(nn.Module):
 
 		self.interpolator = InterpolateSparse2d('bicubic')
 
+		#Try to import LightGlue from Kornia
+		self.kornia_available = False
+		self.lighterglue = None
+		try:
+			import kornia
+			self.kornia_available=True
+		except:
+			pass
+
+
 	@torch.inference_mode()
-	def detectAndCompute(self, x, top_k = None):
+	def detectAndCompute(self, x, top_k = None, detection_threshold = None):
 		"""
 			Compute sparse keypoints & descriptors. Supports batched mode.
 
@@ -50,6 +61,7 @@ class XFeat(nn.Module):
 					'descriptors'  ->   torch.Tensor(N, 64): local features
 		"""
 		if top_k is None: top_k = self.top_k
+		if detection_threshold is None: detection_threshold = self.detection_threshold
 		x, rh1, rw1 = self.preprocess_tensor(x)
 
 		B, _, _H1, _W1 = x.shape
@@ -59,7 +71,7 @@ class XFeat(nn.Module):
 
 		#Convert logits to heatmap and extract kpts
 		K1h = self.get_kpts_heatmap(K1)
-		mkpts = self.NMS(K1h, threshold=0.05, kernel_size=5)
+		mkpts = self.NMS(K1h, threshold=detection_threshold, kernel_size=5)
 
 		#Compute reliability scores
 		_nearest = InterpolateSparse2d('nearest')
@@ -114,6 +126,41 @@ class XFeat(nn.Module):
 		return {'keypoints': mkpts,
 				'descriptors': feats,
 				'scales': sc }
+
+
+	@torch.inference_mode()
+	def match_lighterglue(self, d0, d1, min_conf = 0.1):
+		"""
+			Match XFeat sparse features with LightGlue (smaller version) -- currently does NOT support batched inference because of padding, but its possible to implement easily.
+			input:
+				d0, d1: Dict('keypoints', 'scores, 'descriptors', 'image_size (Width, Height)')
+			output:
+				mkpts_0, mkpts_1 -> np.ndarray (N,2) xy coordinate matches from image1 to image2
+                                idx              -> np.ndarray (N,2) the indices of the matching features
+				
+		"""
+		if not self.kornia_available:
+			raise RuntimeError('We rely on kornia for LightGlue. Install with: pip install kornia')
+		elif self.lighterglue is None:
+			from modules.lighterglue import LighterGlue
+			self.lighterglue = LighterGlue()
+
+		data = {
+				'keypoints0': d0['keypoints'][None, ...],
+				'keypoints1': d1['keypoints'][None, ...],
+				'descriptors0': d0['descriptors'][None, ...],
+				'descriptors1': d1['descriptors'][None, ...],
+				'image_size0': torch.tensor(d0['image_size']).to(self.dev)[None, ...],
+				'image_size1': torch.tensor(d1['image_size']).to(self.dev)[None, ...]
+		}
+
+		#Dict -> log_assignment: [B x M+1 x N+1] matches0: [B x M] matching_scores0: [B x M] matches1: [B x N] matching_scores1: [B x N] matches: List[[Si x 2]], scores: List[[Si]]
+		out = self.lighterglue(data, min_conf = min_conf)
+
+		idxs = out['matches'][0]
+
+		return d0['keypoints'][idxs[:, 0]].cpu().numpy(), d1['keypoints'][idxs[:, 1]].cpu().numpy(), out['matches'][0].cpu().numpy()
+
 
 	@torch.inference_mode()
 	def match_xfeat(self, img1, img2, top_k = None, min_cossim = -1):
@@ -171,8 +218,18 @@ class XFeat(nn.Module):
 
 	def preprocess_tensor(self, x):
 		""" Guarantee that image is divisible by 32 to avoid aliasing artifacts. """
-		if isinstance(x, np.ndarray) and x.shape == 3:
-			x = torch.tensor(x).permute(2,0,1)[None]
+		if isinstance(x, np.ndarray):
+			if len(x.shape) == 3:
+				x = torch.tensor(x).permute(2,0,1)[None]
+			elif len(x.shape) == 2:
+				x = torch.tensor(x[..., None]).permute(2,0,1)[None]
+			else:
+				raise RuntimeError('For numpy arrays, only (H,W) or (H,W,C) format is supported.')
+		
+		
+		if len(x.shape) != 4:
+			raise RuntimeError('Input tensor needs to be in (B,C,H,W) format')
+	
 		x = x.to(self.dev).float()
 
 		H, W = x.shape[-2:]

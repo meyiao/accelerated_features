@@ -5,7 +5,10 @@
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/verlab/accelerated_features/blob/main/notebooks/xfeat_matching.ipynb)  
 [![Open in Spaces](https://huggingface.co/datasets/huggingface/badges/resolve/main/open-in-hf-spaces-sm-dark.svg)](https://huggingface.co/spaces/qubvel-hf/xfeat)
 
-### [[ArXiv]](https://arxiv.org/abs/2404.19174) | [[Project Page]](https://www.verlab.dcc.ufmg.br/descriptors/xfeat_cvpr24/) |  [[CVPR'24 Paper]](https://cvpr.thecvf.com/)
+### [[ArXiv]](https://arxiv.org/abs/2404.19174) | [[Project Page]](https://www.verlab.dcc.ufmg.br/descriptors/xfeat_cvpr24/) |  [[CVPR'24 Paper]](https://openaccess.thecvf.com/content/CVPR2024/html/Potje_XFeat_Accelerated_Features_for_Lightweight_Image_Matching_CVPR_2024_paper.html)
+
+- Training code is now available -> [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/verlab/accelerated_features/blob/main/notebooks/XFeat_training_example.ipynb)
+- 🎉 **New!** XFeat + LighterGlue (smaller version of LightGlue) available! 🚀 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/verlab/accelerated_features/blob/main/notebooks/xfeat%2Blg_torch_hub.ipynb)
 
 <div align="center" style="display: flex; justify-content: center; align-items: center; flex-direction: column;">
   <div style="display: flex; justify-content: space-around; width: 100%;">
@@ -29,6 +32,7 @@ Just wanna quickly try on your images? Check this out: [![Open In Colab](https:/
   - [Training](#training)
   - [Evaluation](#evaluation)
 - [Real-time demo app](#real-time-demo)
+- [XFeat+LightGlue](#xfeat-with-lightglue)
 - [Contribute](#contributing)
 - [Citation](#citation)
 - [License](#license)
@@ -104,6 +108,8 @@ For your convenience, we provide ready to use notebooks for some examples.
 | Minimal example | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/verlab/accelerated_features/blob/main/notebooks/minimal_example.ipynb) |
 | Matching & registration example | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/verlab/accelerated_features/blob/main/notebooks/xfeat_matching.ipynb) |
 | Torch hub example | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/verlab/accelerated_features/blob/main/notebooks/xfeat_torch_hub.ipynb) |
+| Training example (synthetic) | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/verlab/accelerated_features/blob/main/notebooks/XFeat_training_example.ipynb) |
+| XFeat + LightGlue | [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/verlab/accelerated_features/blob/main/notebooks/xfeat%2Blg_torch_hub.ipynb) |
 
 
 ### Inference
@@ -132,10 +138,52 @@ output = xfeat.detectAndCompute(torch.randn(1,3,480,640), top_k = 4096)[0]
 ```
 
 ### Training
-XFeat training code will be released soon. Please stay tuned.
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/verlab/accelerated_features/blob/main/notebooks/XFeat_training_example.ipynb)
+
+To train XFeat as described in the paper, you will need MegaDepth & COCO_20k subset of COCO2017 dataset.
+You can obtain the full COCO2017 train data at https://cocodataset.org/.
+However, we [make available](https://drive.google.com/file/d/1ijYsPq7dtLQSl-oEsUOGH1fAy21YLc7H/view?usp=drive_link) a subset of COCO for convenience. We simply selected a subset of 20k images according to image resolution. Please check COCO [terms of use](https://cocodataset.org/#termsofuse) before using the data.
+
+To reproduce the training setup from the paper, please follow the steps:
+1. Download [COCO_20k](https://drive.google.com/file/d/1ijYsPq7dtLQSl-oEsUOGH1fAy21YLc7H/view?usp=drive_link) containing a subset of COCO2017;
+2. Download MegaDepth dataset. You can follow [LoFTR instructions](https://github.com/zju3dv/LoFTR/blob/master/docs/TRAINING.md#download-datasets), we use the same standard as LoFTR. Then put the megadepth indices inside the MegaDepth root folder following the standard below:
+```bash
+{megadepth_root_path}/train_data/megadepth_indices #indices
+{megadepth_root_path}/MegaDepth_v1 #images & depth maps & poses
+```
+3. Finally you can call training
+```bash
+python3 -m modules.training.train --training_type xfeat_default  --megadepth_root_path <path_to>/MegaDepth --synthetic_root_path <path_to>/coco_20k --ckpt_save_path /path/to/ckpts
+```
 
 ### Evaluation
-XFeat evaluation code will be released soon, alongside the training scripts. Please stay tuned.
+----
+**MegaDepth-1500**
+
+Please note that due to the stochastic nature of RANSAC and major code refactoring, you may observe slightly different AuC results; however, they should be very close to those reported in the paper.
+
+To evaluate on the MegaDepth dataset, you need to first get the dataset:
+```bash
+python3 -m modules.dataset.download --megadepth-1500 --download_dir </path/to/desired/folder>
+```
+Then, you call the mega1500 eval script, you can choose between `xfeat, xfeat-star and alike`. It should take about a minute to run the benchmark:
+```bash
+python3 -m modules.eval.megadepth1500 --dataset-dir </data/Mega1500> --matcher xfeat --ransac-thr 2.5
+```
+---
+**ScanNet-1500**
+
+To evaluate on the ScanNet eval dataset, you need to first get the dataset:
+```bash
+python3 -m modules.dataset.download --scannet-1500 --download_dir </path/to/desired/folder>
+```
+
+Then, you can call the scannet1500 eval script, it should take a couple of minutes:
+```bash
+python3 -m modules.eval.scannet1500 --scannet_path </data/ScanNet1500> --output </data/ScanNet1500/output> && python3 -m modules.eval.scannet1500 --scannet_path </data/ScanNet1500> --output </data/ScanNet1500/output> --show
+```
+
+---
 
 ## Real-time Demo
 To demonstrate the capabilities of XFeat, we provide a real-time matching demo with Homography registration. Currently, you can experiment with XFeat, ORB and SIFT. You will need a working webcam. To run the demo and show the possible input flags, please run:
@@ -156,9 +204,20 @@ python3 realtime_demo.py --method SIFT
 python3 realtime_demo.py --method ORB
 ```
 
+## XFeat with LightGlue
+We have trained a lighter version of LightGlue (LighterGlue). It has fewer parameters and is approximately three times faster than the original LightGlue. Special thanks to the developers of the [GlueFactory](https://github.com/cvg/glue-factory) library, which enabled us to train this version of LightGlue with XFeat.
+Below, we compare the original SP + LG using the [GlueFactory](https://github.com/cvg/glue-factory) evaluation script on MegaDepth-1500.
+Please follow the example to test on your own images:  [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/verlab/accelerated_features/blob/main/notebooks/xfeat%2Blg_torch_hub.ipynb)
+
+Metrics (AUC @ 5 / 10 / 20)
+| Setup           | Max Dimension | Keypoints | XFeat + LighterGlue           | SuperPoint + LightGlue (Official) |
+|-----------------|---------------|-----------|-------------------------------|-----------------------------------|
+| **Fast**  | 640           | 1300      | 0.444 / 0.610 / 0.746       | 0.469 / 0.633 / 0.762          |
+| **Accurate** | 1024          | 4096      | 0.564 / 0.710 / 0.819       | 0.591 / 0.738 / 0.841            |
+
 ## Contributing
 Contributions to XFeat are welcome! 
-Currently, it would be nice to have an export script to efficient deployment engines such as TensorRT and ONNX. Also, it would be cool to train a lightweight learned matcher on top of XFeat local features.
+Currently, it would be nice to have an export script to efficient deployment engines such as TensorRT and ONNX. Also, it would be cool to train other lightweight learned matchers on top of XFeat local features.
 
 ## Citation
 If you find this code useful for your research, please cite the paper:
